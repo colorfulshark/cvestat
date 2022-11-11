@@ -3,6 +3,7 @@ import json
 import urllib
 import requests
 from cpe import CPE
+from .local_data import LocalDatabase
 from .time_stamp import Timestamp
 from .global_logger import GlobalLogger
 
@@ -10,6 +11,7 @@ class NVDCVE:
     def __init__(self):
         self.gl = GlobalLogger()
         self.ts = Timestamp()
+        self.ldb = LocalDatabase()
         self.url = 'https://services.nvd.nist.gov/rest/json/cves/1.0'
         self.request_size = 2000
         # disable SSL warnings
@@ -18,11 +20,11 @@ class NVDCVE:
     # update CVE in database
     def update(self):
         self.gl.info("Start updating CVE bundle")
-        old_ts = '2022-01-01T00:00:00:000 UTC'
-        new_ts = '2022-02-01T00:00:00:000 UTC'
+        old_ts = '2021-02-25T00:00:00:000 UTC'
+        new_ts = '2021-02-26T00:00:00:000 UTC'
         new_cve_list = self.request_new_cve(old_ts, new_ts)
         for c in new_cve_list:
-            print(CVEItem(c).to_json())
+            print(CVEItem(c).to_json)
         self.gl.info("Finish updating CVE bundle")
 
     def get_param(self, start_index=None, result_per_page=None,

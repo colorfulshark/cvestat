@@ -45,7 +45,7 @@ class CVEStat:
     def update(self):
         self.gl.info('start updating local data')
         nvdcve = NVDCVE()
-        nvdcve.update()
+        #nvdcve.update()
 
     # clean up local cache
     def clean(self):
@@ -57,6 +57,3 @@ class CVEStat:
 
 def main():
     CVEStat().run()
-
-if (__name__ == '__main__'):
-    main()
