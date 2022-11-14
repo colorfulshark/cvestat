@@ -1,6 +1,7 @@
 import argparse
 from .nvd_cve import NVDCVE
 from .global_logger import GlobalLogger
+from .local_data import LocalDatabase
 
 
 class CVEStat:
@@ -16,19 +17,17 @@ class CVEStat:
         update = subparser.add_parser('update')
         clean = subparser.add_parser('clean')
         search = subparser.add_parser('search')
+        search.add_argument('--cpe', type=str, nargs='*')
         search.add_argument('--cwe', type=int, nargs='*')
         search.add_argument('--start', type=str)
         search.add_argument('--end', type=str)
-        search.add_argument('--vendor', type=str)
-        search.add_argument('--product', type=str)
         args = parser.parse_args()
         self.command = args.command
         if (args.command == 'search'):
+            self.args['cpe'] = args.cpe
             self.args['cwe'] = args.cwe
             self.args['start'] = args.start
             self.args['end'] = args.end
-            self.args['vendor'] = args.vendor
-            self.args['product'] = args.product
 
     # execute command
     def run(self):
@@ -53,7 +52,11 @@ class CVEStat:
 
     # search CVE based on options
     def search(self):
-        pass
+        self.gl.info('start query')
+        ldb = LocalDatabase()
+        session = ldb.get_session()
+        a = self.args
+        ldb.query(session, a['cpe'], a['cwe'], a['start'], a['end'])
 
 def main():
     CVEStat().run()

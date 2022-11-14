@@ -1,9 +1,10 @@
 import os
+from cpe import CPE
 from appdirs import *
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, Session, relationship
 from sqlalchemy import Column, Integer, String, DateTime, Float, ForeignKey
-from sqlalchemy import select
+from sqlalchemy import select, union
 
 
 class LocalFile:
@@ -85,6 +86,32 @@ class LocalDatabase:
 
     def get_cve_info(self, session:Session, ident):
         return session.get(CVEInfo, ident)
+
+    def query(self, session, cpe_list=None, cwe_list=None, start_date=None, end_date=None):
+        cve_info_list = []
+        if (cpe_list is not None):
+            # use cpe as the main filter
+            all_querys = []
+            for cpe_str in cpe_list:
+                stmt = select(CPEInfo)
+                cpe = CPE(cpe_str)
+                part = cpe.get_part()[0]
+                vendor = cpe.get_vendor()[0]
+                product = cpe.get_product()[0]
+                stmt = stmt.where(CPEInfo.product == product)
+                stmt = stmt.where(CPEInfo.vendor == vendor)
+                stmt = stmt.where(CPEInfo.part == part)
+                all_querys.append(stmt)
+            query = union(*all_querys)
+            stmt = select(CPEInfo).from_statement(query)
+            print(stmt)
+            rows = session.execute(stmt)
+            for cpe_info in rows.scalars():
+                print(type(cpe_info))
+                print(cpe_info.cve.cve_id)
+        elif(cwe_list is not None):
+            # use cwe as the main filter
+            pass
 
     def delete(self, session:Session, inst):
         session.delete(inst)
