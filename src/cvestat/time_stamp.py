@@ -33,3 +33,6 @@ class Timestamp:
 
     def cvt_to_utc(self, ts, form):
         return datetime.strptime(ts, form).strftime(self.form)
+
+    def get_datetime(self, str, form):
+        return datetime.strptime(str, form)

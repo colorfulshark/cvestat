@@ -1,7 +1,7 @@
 import os
 from appdirs import *
 from sqlalchemy import create_engine
-from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import declarative_base, Session
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 
 
@@ -51,3 +51,12 @@ class LocalDatabase:
 
     def create_table(self):
         BaseTbale.metadata.create_all(self.engine)
+
+    def get_session(self):
+        return Session(self.engine)
+
+    def insert(self, session:Session, inst):
+        session.add(inst)
+
+    def commit(sell, session:Session):
+        session.commit()

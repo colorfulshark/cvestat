@@ -3,7 +3,7 @@ import json
 import urllib
 import requests
 from cpe import CPE
-from .local_data import LocalDatabase
+from .local_data import LocalDatabase, CVEInfo
 from .time_stamp import Timestamp
 from .global_logger import GlobalLogger
 
@@ -20,11 +20,19 @@ class NVDCVE:
     # update CVE in database
     def update(self):
         self.gl.info("Start updating CVE bundle")
+        session = self.ldb.get_session()
         old_ts = '2021-02-25T00:00:00:000 UTC'
         new_ts = '2021-02-26T00:00:00:000 UTC'
         new_cve_list = self.request_new_cve(old_ts, new_ts)
         for c in new_cve_list:
-            print(CVEItem(c).to_json)
+            cve_item = CVEItem(c)
+            cve_info = CVEInfo(id=None, cve_id=cve_item.cve_id,
+                               nvd_url=cve_item.link,
+                               description=cve_item.description,
+                               publish=cve_item.published_date,
+                               update=cve_item.modified_date)
+            self.ldb.insert(session, cve_info)
+        self.ldb.commit(session)
         self.gl.info("Finish updating CVE bundle")
 
     def get_param(self, start_index=None, result_per_page=None,
@@ -123,8 +131,8 @@ class CVEItem:
         self.score_v3 = info.get('baseScore')
         self.severity_v3 = info.get('baseSeverity')
         # get timestamp
-        self.published_date = self.ts.cvt_to_utc(data['publishedDate'], '%Y-%m-%dT%H:%MZ')
-        self.modified_date = self.ts.cvt_to_utc(data['lastModifiedDate'], '%Y-%m-%dT%H:%MZ')
+        self.published_date = self.ts.get_datetime(data['publishedDate'], '%Y-%m-%dT%H:%MZ')
+        self.modified_date = self.ts.get_datetime(data['lastModifiedDate'], '%Y-%m-%dT%H:%MZ')
 
     def get_cve_id(self):
         return self.cve_id
