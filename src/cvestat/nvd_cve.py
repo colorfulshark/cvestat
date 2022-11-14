@@ -1,9 +1,8 @@
 import time
 import json
-import urllib
 import requests
 from cpe import CPE
-from .local_data import LocalDatabase, CVEInfo
+from .local_data import LocalDatabase, CVEInfo, CPEInfo, CWEInfo
 from .time_stamp import Timestamp
 from .global_logger import GlobalLogger
 
@@ -22,18 +21,20 @@ class NVDCVE:
         self.gl.info("Start updating CVE bundle")
         session = self.ldb.get_session()
         old_ts = '2021-02-25T00:00:00:000 UTC'
-        new_ts = '2021-02-26T00:00:00:000 UTC'
+        new_ts = '2021-02-27T00:00:00:000 UTC'
         new_cve_list = self.request_new_cve(old_ts, new_ts)
         for c in new_cve_list:
             cve_item = CVEItem(c)
-            cve_info = CVEInfo(id=None, cve_id=cve_item.cve_id,
-                               nvd_url=cve_item.link,
-                               description=cve_item.description,
-                               publish=cve_item.published_date,
-                               update=cve_item.modified_date)
-            self.ldb.insert(session, cve_info)
+            self.update_cve(session, cve_item)
         self.ldb.commit(session)
         self.gl.info("Finish updating CVE bundle")
+
+    def update_cve(self, session, cve_item):
+        old_cve_info = self.ldb.get_cve_info(session, cve_item.primary_key)
+        new_cve_info = cve_item.get_cve_info()
+        if (old_cve_info is not None):
+            self.ldb.delete(session, old_cve_info)
+        self.ldb.insert(session, new_cve_info)
 
     def get_param(self, start_index=None, result_per_page=None,
                   mod_start_date=None, mod_end_date=None,
@@ -101,6 +102,20 @@ class NVDCVE:
             time.sleep(3)
         return cve_list
 
+class CPEItem:
+    def __init__(self, part, vendor, product) -> None:
+        self.part = part
+        self.vendor = vendor
+        self.product = product
+
+    def __hash__(self) -> int:
+        return hash('{}{}{}'.format(self.part, self.vendor, self.product))
+
+    def __eq__(self, cpe_item) -> bool:
+        return (self.part == cpe_item.part and
+                self.vendor == cpe_item.vendor and
+                self.product == cpe_item.product)
+
 class CVEItem:
     def __init__(self, data):
         self.ts = Timestamp()
@@ -109,11 +124,14 @@ class CVEItem:
 
     def parse(self, data):
         self.cve_id = data["cve"]["CVE_data_meta"]["ID"]
-        # get cpe list
+        # get cve primary key in database
+        self.primary_key = self.get_cve_key()
+        # get cpe set
         nodes = data.get('configurations', {}).get('nodes', {})
         # cpe set is used to move away duplicate cpes
-        cpe_set = self.recur_cpe_node(nodes)
-        self.cpe_list = list(cpe_set)
+        self.cpe_set = self.recur_cpe_node(nodes)
+        # get cwe set
+        self.cwe_set = self.get_cwe_set(data['cve']['problemtype'])
         # get patch list
         self.patch_list = self.get_patch_list(data['cve'].get('references'))
         # set nvd link
@@ -134,22 +152,25 @@ class CVEItem:
         self.published_date = self.ts.get_datetime(data['publishedDate'], '%Y-%m-%dT%H:%MZ')
         self.modified_date = self.ts.get_datetime(data['lastModifiedDate'], '%Y-%m-%dT%H:%MZ')
 
-    def get_cve_id(self):
-        return self.cve_id
-
     def get_hash_id(self, cve_id):
         # CVE-<Year>-<Number>
         return int(self.cve_id.replace('-', '').replace('CVE', ''))
 
-    def get_cpe_list(self):
-        return self.cpe_list
-
-    def get_cve_key(cve_id):
-        parts = cve_id.split('-')
+    def get_cve_key(self):
+        parts = self.cve_id.split('-')
         year = int(parts[1])
         number = int(parts[2])
         key = year * 10000000000 + number
         return key
+
+    def get_cwe_set(self, problem_type):
+        cwe_set = set()
+        type_data_list = problem_type.get('problemtype_data', [])
+        for type_data in type_data_list:
+            desc_list = type_data.get('description', [])
+            for desc in desc_list:
+                cwe_set.add(desc['value'])
+        return cwe_set
 
     def get_patch_list(self, refs):
         patch_list = []
@@ -177,9 +198,10 @@ class CVEItem:
                     products = c.get_product()
                     for pt, vd, pd in zip(parts, vendors, products):
                         # we need to use percent encoding
-                        vd = urllib.parse.quote(vd.replace('\\', '')).lower()
-                        pd = urllib.parse.quote(pd.replace('\\', '')).lower()
-                        cpe_item = 'cpe:/{}:{}:{}'.format(pt, vd, pd)
+                        # vd = urllib.parse.quote(vd.replace('\\', '')).lower()
+                        # pd = urllib.parse.quote(pd.replace('\\', '')).lower()
+                        # cpe_item = 'cpe:/{}:{}:{}'.format(pt, vd, pd)
+                        cpe_item = CPEItem(pt, vd, pd)
                         cpe_set.add(cpe_item)
             if('children' in node):
                 sub_cpe_set = self.recur_cpe_node(node['children'])
@@ -201,8 +223,36 @@ class CVEItem:
         data['modified_date'] = self.modified_date
         return data
 
-    def __hash__(self):
-        return self.hash_id
+    def get_cve_info(self):
+        cve_info = CVEInfo()
+        cve_info.id = self.primary_key
+        cve_info.cve_id = self.cve_id
+        cve_info.nvd_url = self.link
+        cve_info.description = self.description
+        cve_info.score_v2 = self.score_v2
+        cve_info.severity_v2 = self.severity_v2
+        cve_info.score_v3 = self.score_v3
+        cve_info.severity_v3 = self.severity_v3
+        cve_info.publish = self.published_date
+        cve_info.update = self.modified_date
+        cve_info.cpes.extend(self.get_cpe_info_list())
+        cve_info.cwes.extend(self.get_cwe_info_list())
+        return cve_info
 
-    def __eq__(self, other_data):
-        return self.hash_id == other_data.hash_id
+    def get_cpe_info_list(self):
+        cpe_info_list = list()
+        for cpe_item in self.cpe_set:
+            cpe_info = CPEInfo()
+            cpe_info.part = cpe_item.part
+            cpe_info.vendor = cpe_item.vendor
+            cpe_info.product = cpe_item.product
+            cpe_info_list.append(cpe_info)
+        return cpe_info_list
+
+    def get_cwe_info_list(self):
+        cwe_info_list = list()
+        for cwe in self.cwe_set:
+            cwe_info = CWEInfo()
+            cwe_info.cwe = cwe
+            cwe_info_list.append(cwe_info)
+        return cwe_info_list
