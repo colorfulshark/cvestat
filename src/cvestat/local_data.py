@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, Session, relationship
 from sqlalchemy import Column, Integer, String, DateTime, Float, ForeignKey
 from sqlalchemy import select, union
+from .time_stamp import Timestamp
 
 
 class LocalFile:
@@ -58,13 +59,19 @@ class CPEInfo(Base):
     cve_id = Column(Integer, ForeignKey('cve_info.id', ondelete='CASCADE'))
     cve = relationship('CVEInfo', back_populates='cpes')
 
+    def __repr__(self) -> str:
+        return 'cpe:/{}:{}:{}'.format(self.part, self.vendor, self.product)
+
 class CWEInfo(Base):
     __tablename__ = 'cwe_info'
 
     id = Column(Integer, primary_key=True)
-    cwe = Column(String(20))
+    cwe = Column(Integer)
     cve_id = Column(Integer, ForeignKey('cve_info.id', ondelete='CASCADE'))
     cve = relationship('CVEInfo', back_populates='cwes')
+
+    def __repr__(self) -> str:
+        return 'CWE-{}'.format(self.cwe)
 
 class LocalDatabase:
     def __init__(self):
@@ -87,11 +94,17 @@ class LocalDatabase:
     def get_cve_info(self, session:Session, ident):
         return session.get(CVEInfo, ident)
 
-    def query(self, session, cpe_list=None, cwe_list=None, start_date=None, end_date=None):
-        cve_info_list = []
+    def query(self, session, cpe_list=None, cwe_list=None,
+              severity_list=None, start_date=None, end_date=None):
+        # Bacause CVEInfo table uses cve id as the primary key, it's safe to remove duplicates
+        # relying on it
+        cve_sets = list()
+        # get cve set filtered by cpe
         if (cpe_list is not None):
-            # use cpe as the main filter
-            all_querys = []
+            cve_set_by_cpe = set()
+            cve_sets.append(cve_set_by_cpe)
+            # generate select statements
+            all_stmts = []
             for cpe_str in cpe_list:
                 stmt = select(CPEInfo)
                 cpe = CPE(cpe_str)
@@ -101,17 +114,52 @@ class LocalDatabase:
                 stmt = stmt.where(CPEInfo.product == product)
                 stmt = stmt.where(CPEInfo.vendor == vendor)
                 stmt = stmt.where(CPEInfo.part == part)
-                all_querys.append(stmt)
-            query = union(*all_querys)
-            stmt = select(CPEInfo).from_statement(query)
-            print(stmt)
-            rows = session.execute(stmt)
-            for cpe_info in rows.scalars():
-                print(type(cpe_info))
-                print(cpe_info.cve.cve_id)
-        elif(cwe_list is not None):
-            # use cwe as the main filter
-            pass
+                all_stmts.append(stmt)
+            u = union(*all_stmts)
+            stmt = select(CPEInfo).from_statement(u)
+            result = session.execute(stmt)
+            for cpe_info in result.scalars():
+                cve_set_by_cpe.add(cpe_info.cve)
+        # get cve set filtered by cwe
+        if (cwe_list is not None):
+            cve_set_by_cwe = set()
+            cve_sets.append(cve_set_by_cwe)
+            # generate select statements
+            all_stmts = list()
+            for cwe_id in cwe_list:
+                stmt = select(CWEInfo).where(CWEInfo.cwe == cwe_id)
+                all_stmts.append(stmt)
+            u = union(*all_stmts)
+            stmt = select(CWEInfo).from_statement(u)
+            result = session.execute(stmt)
+            for cwe_info in result.scalars():
+                cve_set_by_cwe.add(cwe_info.cve)
+        # now we get intersection of those sets
+        if (len(cve_sets) > 0):
+            cve_set = cve_sets[0]
+            for next_set in cve_sets[1:]:
+                cve_set = cve_set.intersection(next_set)
+        # next filter the result by severity
+        if (severity_list is not None):
+            pre_set = cve_set
+            cve_set = set()
+            for cve_info in pre_set:
+                if (cve_info.severity_v2 in severity_list):
+                    cve_set.add(cve_info)
+        # finally filter the result by time range
+        if (start_date is not None or end_date is not None):
+            ts = Timestamp()
+            pre_set = cve_set
+            cve_set = set()
+            if (start_date is None):
+                start_date = ts.get_min_datetime()
+            if (end_date is None):
+                end_date = ts.get_max_datetime()
+            for cve_info in pre_set:
+                if (cve_info.publish >= start_date and
+                    cve_info.publish < end_date):
+                    cve_set.add(cve_info)
+        return cve_set
 
     def delete(self, session:Session, inst):
         session.delete(inst)

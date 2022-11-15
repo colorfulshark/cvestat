@@ -169,7 +169,10 @@ class CVEItem:
         for type_data in type_data_list:
             desc_list = type_data.get('description', [])
             for desc in desc_list:
-                cwe_set.add(desc['value'])
+                cwe = desc['value'].lower()
+                if (cwe.startswith('cwe-')):
+                    cwe = cwe.replace('cwe-', '')
+                    cwe_set.add(int(cwe))
         return cwe_set
 
     def get_patch_list(self, refs):

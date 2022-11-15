@@ -10,6 +10,12 @@ class Timestamp:
         now = datetime.strftime(datetime.utcnow(), self.form)
         return now
 
+    def get_min_datetime(self):
+        return datetime(1995, 1, 1)
+
+    def get_max_datetime(self):
+        return datetime(2099, 12, 30)
+
     def get_interval_min(self, ts1, ts2):
         if(ts1 == ''):
             ts1 = self.initts
