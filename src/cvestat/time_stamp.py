@@ -11,10 +11,10 @@ class Timestamp:
         return now
 
     def get_min_datetime(self):
-        return datetime(1995, 1, 1)
+        return datetime(2005, 1, 1)
 
     def get_max_datetime(self):
-        return datetime(2099, 12, 30)
+        return datetime(2099, 12, 31)
 
     def get_cur_datetime(self):
         return datetime.utcnow()

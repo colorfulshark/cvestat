@@ -65,7 +65,6 @@ class NVDCVE:
                 cur_end = end_date
             new_cves = self.request_cve_from_nvd(start_date, cur_end)
             cve_list.extend(new_cves)
-            print('{}, {}'.format(start_date, cur_end))
             start_date = cur_end
         return cve_list
 
@@ -81,6 +80,8 @@ class NVDCVE:
                                    mod_end_date=end_date)
             try:
                 self.gl.info('CVE retriving: [{}, {}] total: {}'.format(start_date, end_date, total))
+                # avoid being treated as Ddos
+                time.sleep(6)
                 response = requests.get(self.url, params=param, verify=False)
                 data = response.json()
                 # check error message
@@ -102,8 +103,6 @@ class NVDCVE:
                 break
             cve_list.extend(cur_cve_list)
             total += count
-            # avoid being treated as Ddos
-            time.sleep(3)
         return cve_list
 
 class CPEItem:
