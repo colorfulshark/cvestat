@@ -117,8 +117,8 @@ class LocalDatabase:
                 all_stmts.append(stmt)
             u = union(*all_stmts)
             stmt = select(CPEInfo).from_statement(u)
-            result = session.execute(stmt)
-            for cpe_info in result.scalars():
+            result = session.execute(stmt).scalars()
+            for cpe_info in result:
                 cve_set_by_cpe.add(cpe_info.cve)
         # get cve set filtered by cwe
         if (cwe_list is not None):
@@ -131,14 +131,19 @@ class LocalDatabase:
                 all_stmts.append(stmt)
             u = union(*all_stmts)
             stmt = select(CWEInfo).from_statement(u)
-            result = session.execute(stmt)
-            for cwe_info in result.scalars():
+            result = session.execute(stmt).scalars()
+            for cwe_info in result:
                 cve_set_by_cwe.add(cwe_info.cve)
         # now we get intersection of those sets
         if (len(cve_sets) > 0):
             cve_set = cve_sets[0]
             for next_set in cve_sets[1:]:
                 cve_set = cve_set.intersection(next_set)
+        else:
+            # no cpe or cwe filter, just select all
+            stmt = select(CVEInfo)
+            result = session.execute(stmt).scalars()
+            cve_set = set(result)
         # next filter the result by severity
         if (severity_list is not None):
             pre_set = cve_set
