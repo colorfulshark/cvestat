@@ -16,6 +16,9 @@ class Timestamp:
     def get_max_datetime(self):
         return datetime(2099, 12, 30)
 
+    def get_cur_datetime(self):
+        return datetime.utcnow()
+
     def get_interval_min(self, ts1, ts2):
         if(ts1 == ''):
             ts1 = self.initts
@@ -27,10 +30,9 @@ class Timestamp:
         interval = t2 - t1
         return int(interval.total_seconds() / 60)
 
-    def jump_days(self, ts, d):
-        dt = datetime.strptime(ts, self.form)
+    def jump_days(self, dt, d):
         new_dt = dt + timedelta(days=d)
-        return datetime.strftime(new_dt, self.form)
+        return new_dt
 
     def cmp(self, ts1, ts2):
         dt1 = datetime.strptime(ts1, self.form)
@@ -42,3 +44,6 @@ class Timestamp:
 
     def get_datetime(self, str, form):
         return datetime.strptime(str, form)
+
+    def get_datetime_str(self, dt, form):
+        return dt.strftime(form)

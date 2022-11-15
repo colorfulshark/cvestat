@@ -16,7 +16,7 @@ class GlobalLogger:
         fh.setFormatter(self.fmt)
         # log to console
         ch = logging.StreamHandler()
-        ch.setLevel(logging.WARNING)
+        ch.setLevel(logging.INFO)
         ch.setFormatter(self.fmt)
 
         self.logger.setLevel(level)

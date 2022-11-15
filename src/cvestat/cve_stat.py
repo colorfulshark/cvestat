@@ -1,7 +1,7 @@
 import argparse
 from .nvd_cve import NVDCVE
 from .global_logger import GlobalLogger
-from .local_data import LocalDatabase
+from .local_data import LocalDatabase, Record, LocalFile
 from .time_stamp import Timestamp
 from tabulate import tabulate
 
@@ -53,13 +53,25 @@ class CVEStat:
 
     # update local data
     def update(self):
+        ldb = LocalDatabase()
+        ts = Timestamp()
+        session = ldb.get_session()
         self.gl.info('start updating local data')
-        nvdcve = NVDCVE()
-        nvdcve.update()
+        old_ts = ts.get_min_datetime()
+        new_ts = ts.get_cur_datetime()
+        record = ldb.load_record(session)
+        if (record is not None):
+            old_ts = record.timestamp
+        count = NVDCVE().update(old_ts, new_ts)
+        if (count != 0):
+            record = Record(id=None, source='nvd', count=count, timestamp=new_ts)
+            ldb.save_record(session, record)
+        self.gl.info('finish updating local data')
 
     # clean up local cache
     def clean(self):
-        pass
+        lf = LocalFile()
+        lf.cleanall()
 
     # show cve info in console
     def show_cve_info(self, cve_set):

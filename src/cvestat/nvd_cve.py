@@ -13,21 +13,21 @@ class NVDCVE:
         self.ldb = LocalDatabase()
         self.url = 'https://services.nvd.nist.gov/rest/json/cves/1.0'
         self.request_size = 2000
+        self.tsform = '%Y-%m-%dT%H:%M:%S:000 UTC'
         # disable SSL warnings
         requests.packages.urllib3.disable_warnings()
 
     # update CVE in database
-    def update(self):
+    def update(self, old_ts, new_ts):
         self.gl.info("Start updating CVE bundle")
         session = self.ldb.get_session()
-        old_ts = '2021-02-25T00:00:00:000 UTC'
-        new_ts = '2021-02-27T00:00:00:000 UTC'
         new_cve_list = self.request_new_cve(old_ts, new_ts)
         for c in new_cve_list:
             cve_item = CVEItem(c)
             self.update_cve(session, cve_item)
         self.ldb.commit(session)
         self.gl.info("Finish updating CVE bundle")
+        return len(new_cve_list)
 
     def update_cve(self, session, cve_item):
         old_cve_info = self.ldb.get_cve_info(session, cve_item.primary_key)
@@ -42,6 +42,10 @@ class NVDCVE:
         param = {}
         key = ['startIndex', 'resultsPerPage', 'modStartDate',
                'modEndDate', 'keyword', 'cpeMatchString', 'addOns']
+        if (mod_start_date is not None):
+            mod_start_date = self.ts.get_datetime_str(mod_start_date, self.tsform)
+        if (mod_end_date is not None):
+            mod_end_date = self.ts.get_datetime_str(mod_end_date, self.tsform)
         data = [start_index, result_per_page, mod_start_date,
                 mod_end_date, keyword, cpe_match_string, add_ons]
 
@@ -54,10 +58,10 @@ class NVDCVE:
         cve_list = []
         while(True):
             # this is required by NVD
-            if(self.ts.cmp(start_date, end_date) >= 0):
+            if(start_date >= end_date):
                 break
             cur_end = self.ts.jump_days(start_date, 120)
-            if (self.ts.cmp(cur_end, end_date) > 0):
+            if (cur_end > end_date):
                 cur_end = end_date
             new_cves = self.request_cve_from_nvd(start_date, cur_end)
             cve_list.extend(new_cves)

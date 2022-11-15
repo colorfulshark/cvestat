@@ -29,6 +29,26 @@ class LocalFile:
             os.mkdir(dir_name)
         return dir_name
 
+    def rm_file(self, path):
+        try:
+            os.remove(path)
+        except:
+            pass
+
+    def rm_dir(self, path):
+        try:
+            os.rmdir(path)
+        except:
+            pass
+
+    def cleanall(self):
+        self.rm_file(self.get_log_path())
+        self.rm_file(self.get_db_path())
+        self.rm_dir(self.local_cache_dir)
+        self.rm_dir(self.local_config_dir)
+        self.rm_dir(self.local_log_dir)
+        self.rm_dir(self.local_data_dir)
+
 Base = declarative_base()
 class CVEInfo(Base):
     __tablename__ = 'cve_info'
@@ -72,6 +92,14 @@ class CWEInfo(Base):
 
     def __repr__(self) -> str:
         return 'CWE-{}'.format(self.cwe)
+
+class Record(Base):
+    __tablename__ = 'record'
+
+    id = Column(Integer, primary_key=True)
+    source = Column(String)
+    count = Column(Integer)
+    timestamp = Column(DateTime)
 
 class LocalDatabase:
     def __init__(self):
@@ -171,3 +199,12 @@ class LocalDatabase:
 
     def commit(sell, session:Session):
         session.commit()
+
+    def save_record(self, session, inst):
+        session.add(inst)
+        self.commit(session)
+
+    def load_record(self, session):
+        stmt = select(Record).order_by(Record.id.desc())
+        result = session.scalars(stmt).first()
+        return result
