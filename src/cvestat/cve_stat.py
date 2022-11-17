@@ -15,19 +15,18 @@ class CVEStat:
 
     def parse_args(self):
         parser = argparse.ArgumentParser()
-        subparser = parser.add_subparsers(dest='command', required=True)
-        update = subparser.add_parser('update')
-        clean = subparser.add_parser('clean')
-        search = subparser.add_parser('search')
-        search.add_argument('--cpe', type=str, nargs='*')
-        search.add_argument('--cwe', type=int, nargs='*')
-        search.add_argument('--severity', type=str, nargs='*')
-        search.add_argument('--start', type=str)
-        search.add_argument('--end', type=str)
-        search.add_argument('--show', action='store_true')
+        subparser = parser.add_subparsers(dest='command')
+        update = subparser.add_parser('update', help='Fetch new CVEs from upstream')
+        clean = subparser.add_parser('clean', help='Delete temp files and database')
+        parser.add_argument('--cpe', type=str, nargs='*')
+        parser.add_argument('--cwe', type=int, nargs='*')
+        parser.add_argument('--severity', type=str, nargs='*')
+        parser.add_argument('--start', type=str)
+        parser.add_argument('--end', type=str)
+        parser.add_argument('--show', action='store_true')
         args = parser.parse_args()
         self.command = args.command
-        if (args.command == 'search'):
+        if (self.command is None):
             ts = Timestamp()
             self.args['cpe'] = args.cpe
             self.args['cwe'] = args.cwe
@@ -48,7 +47,7 @@ class CVEStat:
             self.update()
         elif (self.command == 'clean'):
             self.clean()
-        elif (self.command == 'search'):
+        else:
             self.search()
 
     # update local data
