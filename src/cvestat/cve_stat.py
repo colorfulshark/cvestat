@@ -4,7 +4,7 @@ from .global_logger import GlobalLogger
 from .local_data import LocalDatabase, Record, LocalFile
 from .time_stamp import Timestamp
 from tabulate import tabulate
-from cwe import Database
+from cwe2.database import Database
 
 
 class CVEStat:
@@ -96,10 +96,11 @@ class CVEStat:
         headers = ['CWE', 'Numbers', 'Description']
         table_data = []
         for cwe, number in cwe_stat.items():
-            cwe_desc = ''
-            weakness = cwe_db.get(cwe)
-            if (weakness is not None):
+            try:
+                weakness = cwe_db.get(cwe)
                 cwe_desc = weakness.name
+            except:
+                cwe_desc = ''
             table_data.append([cwe, number, cwe_desc])
         print(tabulate(table_data, headers))
 
