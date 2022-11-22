@@ -4,6 +4,7 @@ from .global_logger import GlobalLogger
 from .local_data import LocalDatabase, Record, LocalFile
 from .time_stamp import Timestamp
 from tabulate import tabulate
+from cwe import Database
 
 
 class CVEStat:
@@ -23,7 +24,7 @@ class CVEStat:
         parser.add_argument('--severity', type=str, nargs='*')
         parser.add_argument('--start', type=str)
         parser.add_argument('--end', type=str)
-        parser.add_argument('--show', action='store_true')
+        parser.add_argument('--show', type=str, choices=('cve', 'cwe'))
         args = parser.parse_args()
         self.command = args.command
         if (self.command is None):
@@ -82,6 +83,26 @@ class CVEStat:
         self.show_cve_number(cve_set)
         print(tabulate(table_data, headers))
 
+    def show_cwe_info(self, cve_set):
+        cwe_db = Database()
+        cwe_stat = dict()
+        for cve_info in cve_set:
+            cwe_list = cve_info.cwes
+            for cwe_info in cwe_list:
+                if (cwe_stat.get(cwe_info.cwe) is None):
+                    cwe_stat[cwe_info.cwe] = 0
+                cwe_stat[cwe_info.cwe] += 1
+        cwe_stat = dict(sorted(cwe_stat.items(), key=lambda item: item[1]))
+        headers = ['CWE', 'Numbers', 'Description']
+        table_data = []
+        for cwe, number in cwe_stat.items():
+            cwe_desc = ''
+            weakness = cwe_db.get(cwe)
+            if (weakness is not None):
+                cwe_desc = weakness.name
+            table_data.append([cwe, number, cwe_desc])
+        print(tabulate(table_data, headers))
+
     # show cve number in console
     def show_cve_number(self, cve_set):
         print('CVE Numbers: {}'.format(len(cve_set)))
@@ -92,8 +113,10 @@ class CVEStat:
         session = ldb.get_session()
         a = self.args
         cve_set = ldb.query(session, a['cpe'], a['cwe'], a['severity'], a['start'], a['end'])
-        if (a['show']):
+        if (a['show'] == 'cve'):
             self.show_cve_info(cve_set)
+        elif (a['show'] == 'cwe'):
+            self.show_cwe_info(cve_set)
         else:
             self.show_cve_number(cve_set)
 
